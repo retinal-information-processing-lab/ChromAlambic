@@ -8,6 +8,7 @@ import serial.tools.list_ports
 import threading
 import time
 import subprocess
+import datetime # Nouveau : pour gérer la date de l'export
 
 # --- CONFIGURATION ---
 ARDUINO_BOARD = "arduino:avr:uno" 
@@ -133,8 +134,18 @@ class LucioleApp:
         
         tk.Label(status_row, textvariable=self.stim_duration, bg=self.COLOR_CARD, fg="#00FF00", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=20)
         
-        self.lbl_status = tk.Label(log_frame, text="STATUS: IDLE", bg=self.COLOR_CARD, fg="#555", font=("Arial", 10, "bold"))
-        self.lbl_status.pack(anchor="w")
+        # --- NOUVEAU CONTENEUR POUR LE STATUT ET L'EXPORT LOG ---
+        status_bar_frame = tk.Frame(log_frame, bg=self.COLOR_CARD)
+        status_bar_frame.pack(fill=tk.X)
+        
+        self.lbl_status = tk.Label(status_bar_frame, text="STATUS: IDLE", bg=self.COLOR_CARD, fg="#555", font=("Arial", 10, "bold"))
+        self.lbl_status.pack(side=tk.LEFT)
+        
+        self.btn_export = tk.Button(status_bar_frame, text="EXPORT LOG", bg="#333", fg="white", relief="flat", 
+                                    command=self.export_log, font=("Segoe UI", 8, "bold"), cursor="hand2")
+        self.btn_export.pack(side=tk.RIGHT)
+        # --------------------------------------------------------
+
         self.progress = ttk.Progressbar(log_frame, orient=tk.HORIZONTAL, mode='determinate')
         self.progress.pack(fill=tk.X, pady=5)
 
@@ -146,6 +157,39 @@ class LucioleApp:
         self.btn_start.pack(fill=tk.X, pady=(10, 0))
 
     # --- LOGIC ---
+
+    def export_log(self):
+        """ Fonction pour exporter le log au format log_Luciole_YYYYMMDD_0X.txt """
+        folder_path = filedialog.askdirectory(title="Select folder to save log")
+        if not folder_path:
+            return # Annulé par l'utilisateur
+            
+        date_str = datetime.datetime.now().strftime("%Y%m%d")
+        index = 1
+        
+        # Recherche du prochain nom de fichier disponible
+        while True:
+            filename = f"log_Luciole_{date_str}_{index:02d}.txt"
+            filepath = os.path.join(folder_path, filename)
+            if not os.path.exists(filepath):
+                break
+            index += 1
+            
+        try:
+            log_content = self.log_text.get("1.0", tk.END)
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write("--- LUCIOLE SYSTEM LOG ---\n")
+                f.write(f"Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"VEC File: {self.vec_path.get()}\n")
+                f.write(f"CSV File: {self.csv_path.get()}\n")
+                f.write("--------------------------\n\n")
+                f.write(log_content)
+                
+            self.log(f"Log exported successfully to {filename}")
+            messagebox.showinfo("Export Success", f"Log correctly saved in:\n{filepath}")
+        except Exception as e:
+            self.log(f"Failed to export log: {e}")
+            messagebox.showerror("Export Error", f"Could not save the log file:\n{e}")
 
     def unified_init(self):
         if self.is_connected:
@@ -271,7 +315,6 @@ class LucioleApp:
         except Exception as e: 
             self.log(f"Start Error: {e}")
             messagebox.showerror("Error", str(e))
-
 
     def communication_thread(self, selected_wl, voltage_table, sequence):
         try:
