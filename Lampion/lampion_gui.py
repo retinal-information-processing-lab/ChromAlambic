@@ -210,13 +210,20 @@ class LampionApp:
             self.set_preset(idx, self.voltages[0])
 
     def toggle_led(self, idx):
+        # --- SAFETY CHECK: Prevent turning on if not connected ---
+        if not self.is_connected:
+            messagebox.showwarning("Disconnected", "Please UPLOAD AND CONNECT to the board first.")
+            return
+
         self.states[idx] = not self.states[idx]
         color = self.leds[idx]['color']
         btn = self.leds[idx]['btn_onoff']
+        
         if self.states[idx]:
             btn.config(text="ON", bg=color, fg="black" if color in ["#00FF00", "#00CCFF"] else "white")
         else:
             btn.config(text="OFF", bg="#300", fg="white")
+            
         self.send_update(idx)
 
     # --- Communication (arduino-cli) ---
