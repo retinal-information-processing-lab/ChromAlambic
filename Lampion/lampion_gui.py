@@ -51,11 +51,12 @@ class LampionApp:
         ]
 
         self.ser = None
+        self.is_connected = False # Nouveau drapeau de connexion
         self.states = [False] * 5
         self.v_vars = [tk.StringVar(value="0.000") for _ in range(5)]
         
         self.setup_ui()
-        self.load_last_port() # Charge le dernier port utilisé
+        self.load_last_port()
 
     def setup_ui(self):
         # --- Connection Bar ---
@@ -100,7 +101,12 @@ class LampionApp:
             ent.pack(pady=2)
             ent.bind("<Return>", lambda e, idx=i: self.send_update_manual(idx))
 
-            # --- Presets Grid ---
+            # --- NOUVEAU PLACEMENT DU BOUTON NEXT STEP ---
+            btn_next = tk.Button(col, text="NEXT STEP", bg="#333", fg="white", relief="flat",
+                                 height=1, font=self.FONT_NEXT, command=lambda idx=i: self.next_voltage(idx), cursor="hand2")
+            btn_next.pack(pady=(5, 5), fill=tk.X)
+
+            # --- Presets Grid (Placé après) ---
             preset_wrapper = tk.Frame(col, bg=self.COLOR_CARD)
             preset_wrapper.pack(expand=True, fill=tk.BOTH)
             preset_container = tk.Frame(preset_wrapper, bg=self.COLOR_CARD)
@@ -114,28 +120,36 @@ class LampionApp:
                                   command=lambda val=v, idx=i: self.set_preset(idx, val), cursor="hand2")
                 btn_v.grid(row=r, column=c, padx=1, pady=1)
                 led['btns'][v_str] = btn_v
-
-            btn_next = tk.Button(col, text="NEXT STEP", bg="#333", fg="white", relief="flat",
-                                 height=1, font=self.FONT_NEXT, command=lambda idx=i: self.next_voltage(idx), cursor="hand2")
-            btn_next.pack(side=tk.BOTTOM, pady=(5, 0), fill=tk.X)
             
         for i in range(5): self.update_highlight(i)
 
-    # --- Gestion de la fermeture ---
-    def on_closing(self):
-        """ Appelé quand on clique sur la croix rouge """
-        if self.ser and self.ser.is_open:
-            print("Closing application: Turning all LEDs OFF...")
+    # --- Gestion de la fermeture / Déconnexion ---
+    def disconnect_hardware(self):
+        print("Disconnecting hardware: Turning all LEDs OFF...")
+        if self.ser: 
             try:
-                # Force l'extinction des 5 canaux (0 à 4)
-                for i in range(5):
-                    self.ser.write(b'D')
-                    self.ser.write(bytearray([i, 0, 0])) # Envoi 0 volt
-                time.sleep(0.1) # Petit délai pour être sûr que ça parte
-                self.ser.close()
+                if self.ser.is_open:
+                    # Envoi 0 volt pour éteindre les 5 canaux avant de couper
+                    for i in range(5):
+                        self.ser.write(b'D')
+                        self.ser.write(bytearray([i, 0, 0])) 
+                    time.sleep(0.1)
+                    self.ser.close()
             except Exception as e:
                 print(f"Error during shutdown: {e}")
+                
+        self.ser = None
+        self.is_connected = False
         
+        # Reset des boutons UI
+        self.btn_conn.config(text="UPLOAD AND CONNECT", bg="#333")
+        for i in range(5):
+            self.states[i] = False
+            self.leds[i]['btn_onoff'].config(text="OFF", bg="#300", fg="white")
+
+    def on_closing(self):
+        """ Appelé quand on clique sur la croix rouge """
+        self.disconnect_hardware()
         self.root.destroy()
 
     # --- Gestion de la config (Port COM) ---
@@ -145,12 +159,11 @@ class LampionApp:
                 with open(CONFIG_FILE, 'r') as f:
                     data = json.load(f)
                     last_port = data.get("port", "")
-                    # Vérifie si le port existe toujours
                     available_ports = [p.device for p in serial.tools.list_ports.comports()]
                     if last_port in available_ports:
                         self.port_combo.set(last_port)
         except Exception:
-            pass # Pas grave si ça échoue
+            pass
 
     def save_last_port(self, port):
         try:
@@ -208,16 +221,20 @@ class LampionApp:
 
     # --- Communication (arduino-cli) ---
     def start_upload_and_connect(self):
+        # Bascule la connexion si déjà connecté
+        if self.is_connected:
+            self.disconnect_hardware()
+            return
+
         port = self.port_combo.get()
         if not port: return
         
-        # Sauvegarde le port pour la prochaine fois
         self.save_last_port(port)
-
         sketch_path = os.path.join("lampion_arduino", "lampion_arduino.ino")
         
-        self.btn_conn.config(text="UPLOADING...", bg="#850")
+        self.btn_conn.config(text="UPLOADING...", bg="#850", state=tk.DISABLED)
         self.root.update()
+        
         try:
             cmd = ["arduino-cli", "compile", "--upload", "--fqbn", ARDUINO_BOARD, sketch_path, "-p", port]
             subprocess.run(cmd, check=True)
@@ -226,10 +243,17 @@ class LampionApp:
             time.sleep(2) 
             
             self.ser = serial.Serial(port, 115200, timeout=1)
-            self.btn_conn.config(text="CONNECTED", bg="#050")
             
+            # Mise à jour UI post-connexion
+            self.is_connected = True
+            self.btn_conn.config(text="DISCONNECT", bg="#500", state=tk.NORMAL)
+            
+            # Synchronisation initiale : forcer toutes les LEDs aux valeurs actuelles de l'UI
+            for i in range(5):
+                self.send_update(i)
+                
         except Exception as e:
-            self.btn_conn.config(text="UPLOAD ERROR", bg="#500")
+            self.btn_conn.config(text="UPLOAD ERROR", bg="#500", state=tk.NORMAL)
             print(f"Error details: {e}")
             messagebox.showerror("Error", f"Upload failed:\n{e}")
 
