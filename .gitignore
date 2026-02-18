@@ -122,3 +122,5 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+Lampion/Lampion.bat - Raccourci.lnk
+*.lnk
