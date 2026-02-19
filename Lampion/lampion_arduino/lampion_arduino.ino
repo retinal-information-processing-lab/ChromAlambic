@@ -20,7 +20,7 @@ void loop() {
             byte low = Serial.read();    
             uint16_t rawValue = (high << 8) | low;
 
-            uint16_t wl_options[] = {385, 415, 490, 530, 625};
+            uint16_t wl_options[] = {385, 415, 490, 530, 595};
             
             if (ledIdx < 5) {
                 // On appelle la fonction de la librairie (corrigée)
