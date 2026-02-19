@@ -59,7 +59,7 @@ byte getLeftWord(word wavelength, float amplitude){
   word amplitudeBits = 4095/2.5*amplitude;
   byte address = 0;
   switch (wavelength){
-    case 625: address=0b00000000; break;
+    case 595: address=0b00000000; break;
     case 530: address=0b00010000; break;
     case 490: address=0b01010000; break;
     case 415: address=0b00110000; break;
@@ -106,7 +106,7 @@ void applyRawToDAC(int wavelength, uint16_t rawValue, int CS) {
     // 1. Calcul de l'adresse selon la longueur d'onde
     byte address = 0;
     switch (wavelength){
-        case 625: address=0b00000000; break;
+        case 595: address=0b00000000; break;
         case 530: address=0b00010000; break;
         case 490: address=0b01010000; break;
         case 420: // (Note: ton python dit 420, le .ino dit 415, j'ai mis les cas probables)

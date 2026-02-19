@@ -47,7 +47,7 @@ class LampionApp:
             {"wl": "420", "color": "#0033FF", "idx": 1, "btns": {}},
             {"wl": "490", "color": "#00CCFF", "idx": 2, "btns": {}},
             {"wl": "530", "color": "#00FF00", "idx": 3, "btns": {}},
-            {"wl": "625", "color": "#FF0000", "idx": 4, "btns": {}}
+            {"wl": "595", "color": "#FF0000", "idx": 4, "btns": {}}
         ]
 
         self.ser = None
