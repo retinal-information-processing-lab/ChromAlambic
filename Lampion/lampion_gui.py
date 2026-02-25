@@ -10,7 +10,10 @@ import json  # Nouveau : pour sauvegarder la config
 # --- CONFIGURATION ---
 # Change ceci en "arduino:avr:mega" si tu utilises la grande carte !
 ARDUINO_BOARD = "arduino:avr:uno"  
-CONFIG_FILE = "lampion_config.json"
+
+# Build paths relative to the script's location to make them robust
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(_SCRIPT_DIR, "lampion_config.json")
 
 class LampionApp:
     def __init__(self, root):
@@ -237,7 +240,7 @@ class LampionApp:
         if not port: return
         
         self.save_last_port(port)
-        sketch_path = os.path.join("lampion_arduino", "lampion_arduino.ino")
+        sketch_path = os.path.join(_SCRIPT_DIR, "lampion_arduino", "lampion_arduino.ino")
         
         self.btn_conn.config(text="UPLOADING...", bg="#850", state=tk.DISABLED)
         self.root.update()

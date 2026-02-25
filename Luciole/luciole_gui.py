@@ -14,7 +14,10 @@ from collections import deque
 
 # --- CONFIGURATION ---
 ARDUINO_BOARD     = "arduino:avr:uno"
-CONFIG_FILE       = "luciole_config.json"
+
+# Build paths relative to the script's location to make them robust
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(_SCRIPT_DIR, "luciole_config.json")
 
 # Must mirror Arduino's BUFFER_SIZE and REFILL_THRESHOLD
 ARDUINO_BUFFER_SIZE       = 100   # slots on Arduino (99 usable)
@@ -242,7 +245,7 @@ class LucioleApp:
 
         def run_task():
             try:
-                sketch_path = os.path.join("luciole_arduino", "luciole_arduino.ino")
+                sketch_path = os.path.join(_SCRIPT_DIR, "luciole_arduino", "luciole_arduino.ino")
                 cmd = ["arduino-cli", "compile", "--upload", "-p", port,
                        "--fqbn", ARDUINO_BOARD, sketch_path]
                 res = subprocess.run(cmd, capture_output=True, text=True)
