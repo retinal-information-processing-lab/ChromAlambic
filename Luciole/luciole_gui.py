@@ -17,8 +17,8 @@ ARDUINO_BOARD     = "arduino:avr:uno"
 CONFIG_FILE       = "luciole_config.json"
 
 # Must mirror Arduino's BUFFER_SIZE and REFILL_THRESHOLD
-ARDUINO_BUFFER_SIZE    = 100   # slots on Arduino (99 usable)
-ARDUINO_REFILL_THRESHOLD = 20  # Arduino asks for this many mixes at a time
+ARDUINO_BUFFER_SIZE       = 100   # slots on Arduino (99 usable)
+ARDUINO_REFILL_THRESHOLD  = 20    # Arduino asks for this many mixes at a time
 
 # Message type bytes (Arduino -> Python)
 MSG_REFILL   = 0x01
@@ -43,11 +43,10 @@ class LucioleApp:
         self.num_triggers     = 0
 
         # Frequency: detected by Arduino at runtime.
-        # dmd_freq_estimate is kept for pre-run duration display only.
-        self.dmd_freq_estimate   = tk.StringVar(value="?")   # read-only display
-        self.detected_freq_hz    = None                       # set when Arduino reports it
-        self.stim_duration       = tk.StringVar(value="Duration: --")
-        self.total_sequence_len  = 0   # set at run start, used for time-remaining
+        self.dmd_freq_estimate  = tk.StringVar(value="Freq: --- Hz")
+        self.detected_freq_hz   = None
+        self.stim_duration      = tk.StringVar(value="Duration: --")
+        self.total_sequence_len = 0
 
         self.vec_path = tk.StringVar()
         self.csv_path = tk.StringVar()
@@ -158,18 +157,14 @@ class LucioleApp:
         status_row = tk.Frame(log_frame, bg=self.COLOR_CARD)
         status_row.pack(fill=tk.X, pady=(0, 5))
 
-        # Freq: read-only label (populated by Arduino)
-        tk.Label(status_row, text="Freq (Hz):", bg=self.COLOR_CARD, fg="#777").pack(side=tk.LEFT)
+        # Freq: clean read-only label, no box, no annotation
         self.lbl_freq = tk.Label(status_row, textvariable=self.dmd_freq_estimate,
-                                 bg="#000", fg="#FFAA00", width=6,
-                                 font=("Consolas", 10, "bold"), relief="flat")
-        self.lbl_freq.pack(side=tk.LEFT, padx=5)
-        tk.Label(status_row, text="(auto-detected)", bg=self.COLOR_CARD,
-                 fg="#555", font=("Segoe UI", 8)).pack(side=tk.LEFT)
+                                 bg=self.COLOR_CARD, fg="#777", font=("Consolas", 10))
+        self.lbl_freq.pack(side=tk.LEFT, padx=(0, 20))
 
         # Duration / remaining
         tk.Label(status_row, textvariable=self.stim_duration, bg=self.COLOR_CARD,
-                 fg="#00FF00", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=20)
+                 fg="#00FF00", font=("Arial", 10, "bold")).pack(side=tk.LEFT)
 
         status_bar_frame = tk.Frame(log_frame, bg=self.COLOR_CARD)
         status_bar_frame.pack(fill=tk.X)
@@ -210,8 +205,8 @@ class LucioleApp:
         date_str = datetime.datetime.now().strftime("%Y%m%d")
         index = 1
         while True:
-            filename  = f"log_Luciole_{date_str}_{index:02d}.txt"
-            filepath  = os.path.join(folder_path, filename)
+            filename = f"log_Luciole_{date_str}_{index:02d}.txt"
+            filepath = os.path.join(folder_path, filename)
             if not os.path.exists(filepath):
                 break
             index += 1
@@ -297,7 +292,7 @@ class LucioleApp:
         self.btn_start.config(state=tk.DISABLED, bg="#333", fg="#555")
         self.progress.configure(value=0)
         self.stim_duration.set("Duration: --")
-        self.dmd_freq_estimate.set("?")
+        self.dmd_freq_estimate.set("Freq: --- Hz")
         self.detected_freq_hz = None
         self.log("Hardware disconnected.")
 
@@ -343,7 +338,7 @@ class LucioleApp:
                 return
 
             # Coverage check
-            used = set(sequence)
+            used   = set(sequence)
             unused = set(range(num_mixes_available)) - used
             if unused:
                 self.log(f"WARNING: {len(unused)} CSV rows never used "
@@ -351,11 +346,9 @@ class LucioleApp:
             else:
                 self.log("CHECK OK: All CSV rows used at least once.")
 
-            # --- Build voltage lookup: raw[mix_index][led_index]
-            # CONTRACT: led_index 0 = lowest selected wavelength = CSV column 0
-            # selected_wl is already in ascending order (filtered from available_wavelengths)
-            num_leds = len(selected_wl)
-            raw_table = []   # raw_table[mix_index] = list of uint16 per LED
+            # Build voltage lookup: raw_table[mix_index] = [uint16 per LED]
+            # Column order in CSV = ascending wavelength order = selected_wl order
+            raw_table = []
             for _, row in df_csv.iterrows():
                 mix = []
                 for v in row:
@@ -363,13 +356,12 @@ class LucioleApp:
                     mix.append(max(0, min(4095, raw)))
                 raw_table.append(mix)
 
-            # Build the ordered mix stream from the VEC sequence
-            # mix_stream[i] = the raw values for trigger i, in LED ascending-wl order
+            # Build ordered mix stream from VEC sequence
             mix_stream = [raw_table[idx] for idx in sequence]
 
             # Reset freq display
             self.detected_freq_hz = None
-            self.dmd_freq_estimate.set("?")
+            self.dmd_freq_estimate.set("Freq: --- Hz")
             self.stim_duration.set("Duration: --")
             self.total_sequence_len = num_triggers
 
@@ -390,14 +382,13 @@ class LucioleApp:
     # =========================================================================
     def communication_thread(self, selected_wl, mix_stream):
         """
-        mix_stream: list of lists, mix_stream[i] = [uint16, ...] one per LED,
+        mix_stream: list of lists — mix_stream[i] = [uint16, ...] one per LED,
                     in ascending wavelength order (matches CSV column order).
         """
         try:
-            num_leds = len(selected_wl)
-            total    = len(mix_stream)
-            queue     = deque(mix_stream)  # remaining mixes to send; popleft = next to send
-            ack_count = 0                  # triggers played by Arduino (from refill msgs)
+            total     = len(mix_stream)
+            queue     = deque(mix_stream)
+            ack_count = 0
 
             if not self.ser or not self.ser.is_open:
                 return
@@ -406,30 +397,27 @@ class LucioleApp:
             self.ser.reset_output_buffer()
             time.sleep(0.05)
 
-            # --- Build LED mask ---
-            # Bit i corresponds to wl_options[i] = [385,420,490,530,625]
-            # CONTRACT: same bit order as Arduino's handleSetup
+            # Build LED mask — bit i = wl_options[i], same order as Arduino
             wl_options = [385, 420, 490, 530, 625]
             mask = 0
             for i, wl in enumerate(wl_options):
                 if wl in selected_wl:
                     mask |= (1 << i)
 
-            # --- Send 'S' + mask ---
+            # Send 'S' + mask
             self.ser.write(b'S')
             self.ser.write(bytes([mask]))
 
-            # --- Send initial buffer fill (ARDUINO_BUFFER_SIZE - 1 mixes) ---
+            # Send initial buffer fill (ARDUINO_BUFFER_SIZE - 1 mixes)
             initial_fill = ARDUINO_BUFFER_SIZE - 1
             for _ in range(initial_fill):
                 if not queue:
                     break
                 mix = queue.popleft()
                 for raw in mix:
-                    # CONTRACT: send in ascending-wavelength order (= CSV column order)
                     self.ser.write(bytes([(raw >> 8) & 0xFF, raw & 0xFF]))
 
-            # --- Wait for 'R' handshake ---
+            # Wait for 'R' handshake
             self.log("Waiting for Arduino handshake...")
             start_wait = time.time()
             while True:
@@ -448,20 +436,19 @@ class LucioleApp:
             self.log("  >>> START DMD STIMULUS NOW <<<")
             self.log("--------------------------------")
 
-            # --- Message parser state ---
-            rx_buf   = bytearray()
+            # Message parser state
+            rx_buf            = bytearray()
             timeout_threshold = 2.0
             last_msg_time     = time.time()
             first_trigger     = False
 
-            # --- Main loop ---
+            # Main loop
             while ack_count < total:
                 if not self.protocol_running:
                     return
                 if self.ser is None:
                     return
 
-                # Read all available bytes
                 n = self.ser.in_waiting
                 if n > 0:
                     rx_buf += self.ser.read(n)
@@ -470,25 +457,22 @@ class LucioleApp:
                         first_trigger = True
                         self.root.after(0, lambda: self.log("--> FIRST TRIGGER. Running..."))
 
-                # Parse complete messages from rx_buf
+                # Parse complete messages
                 while rx_buf:
                     msg_type = rx_buf[0]
 
                     if msg_type == MSG_REFILL:
-                        # 0x01 + 1 byte (count)
                         if len(rx_buf) < 2:
                             break
                         n_requested = rx_buf[1]
                         rx_buf = rx_buf[2:]
                         ack_count += n_requested
                         self._send_mixes(queue, n_requested)
-                        # Update progress
                         pct = min(100, int(ack_count / total * 100))
                         self.root.after(0, lambda v=pct: self.progress.configure(value=v))
                         self._update_time_remaining(ack_count, total)
 
                     elif msg_type == MSG_FREQ:
-                        # 0x02 + 2 bytes
                         if len(rx_buf) < 3:
                             break
                         hz = struct.unpack('>H', rx_buf[1:3])[0]
@@ -497,7 +481,6 @@ class LucioleApp:
                         self.root.after(0, lambda f=hz: self._on_freq_detected(f))
 
                     elif msg_type == MSG_TRIG_ERR:
-                        # 0x03 + 4 bytes
                         if len(rx_buf) < 5:
                             break
                         delta_us = struct.unpack('>I', rx_buf[1:5])[0]
@@ -525,7 +508,7 @@ class LucioleApp:
 
                 time.sleep(0.001)
 
-            # --- End report ---
+            # End report
             if ack_count >= total:
                 self.log("DONE: Sequence completed (100%).")
             else:
@@ -548,18 +531,17 @@ class LucioleApp:
                 break
             mix = queue.popleft()
             for raw in mix:
-                # CONTRACT: ascending wavelength order preserved from queue construction
                 self.ser.write(bytes([(raw >> 8) & 0xFF, raw & 0xFF]))
 
     def _on_freq_detected(self, hz):
         """Called on main thread when Arduino reports the detected frequency."""
-        self.dmd_freq_estimate.set(str(hz))
+        self.dmd_freq_estimate.set(f"Freq: {hz} Hz")
         self.detected_freq_hz = hz
         self.log(f"Frequency detected by Arduino: {hz} Hz", "freq")
         self._update_time_remaining(0, self.total_sequence_len)
 
     def _update_time_remaining(self, ack_count, total):
-        """Update the duration/remaining label. Called on main thread."""
+        """Update the duration/remaining label. Always called on main thread."""
         if self.detected_freq_hz and self.detected_freq_hz > 0 and total > 0:
             frames_left = total - ack_count
             secs = frames_left / self.detected_freq_hz
@@ -608,9 +590,9 @@ class LucioleApp:
 
     def save_settings(self):
         d = {
-            "vec_path":     self.vec_path.get(),
-            "csv_path":     self.csv_path.get(),
-            "com_port":     self.com_port.get(),
+            "vec_path":      self.vec_path.get(),
+            "csv_path":      self.csv_path.get(),
+            "com_port":      self.com_port.get(),
             "selected_leds": [wl for wl, var in self.led_vars.items() if var.get()]
         }
         with open(CONFIG_FILE, "w") as f:
