@@ -9,4 +9,4 @@ elif [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
 fi
 
 conda activate chromalambic
-python3 luciole_gui.py
+python3 lampion_gui.py

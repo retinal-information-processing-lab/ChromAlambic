@@ -8,8 +8,8 @@ call "%CONDA_PATH%" chromalambic
 
 :: 3. NAVIGATION (L'étape cruciale qui manquait)
 :: On se déplace physiquement dans le dossier "Luciole"
-:: "%~dp0" signifie "le dossier où se trouve ce fichier .bat"
-cd /d "%~dp0\Luciole"
+:: "%~dp0" signifie "le dossier où se trouve ce fichier .bat", on s'y déplace.
+cd /d "%~dp0"
 
 :: 4. Lancement SILENCIEUX
 :: Comme on est déjà dans le bon dossier, on appelle juste le nom du fichier
